@@ -31,7 +31,13 @@ const PROJECTS = [
 const ENDPOINT_PRESETS = [
   { label: "Local (11434)", value: "http://localhost:11434" },
   { label: "Cloud (11435)", value: "http://localhost:11435" },
-  { label: "Remote GPU", value: "http://localhost:11436" },
+  { label: "Remote GPU (11436)", value: "http://localhost:11436" },
+];
+
+const MODEL_PRESETS = [
+  { label: "qwen3-coder:480b-cloud", value: "qwen3-coder:480b-cloud" },
+  { label: "llama3.2:latest", value: "llama3.2:latest" },
+  { label: "llama3.2:1b", value: "llama3.2:1b" },
 ];
 
 interface OllamaModel { id: string; label: string; size: string | null; }
@@ -65,6 +71,20 @@ interface SessionSummary {
   size: string;
 }
 
+interface AutomationTask {
+  id: string;
+  name: string;
+  description: string;
+  schedule: string;
+  command: string;
+  enabled: boolean;
+  createdBy: string;
+  createdAt: string;
+  lastRun: string | null;
+  lastStatus: "ok" | "error" | "pending" | null;
+  tags: string[];
+}
+
 function extractCodeBlock(text: string): string | null {
   const match = text.match(/```[\w]*\n?([\s\S]*?)```/);
   return match ? match[1].trim() : null;
@@ -72,7 +92,7 @@ function extractCodeBlock(text: string): string | null {
 
 export function VibeCodePanel() {
   // Left panel state
-  const [selectedProject, setSelectedProject] = useState(PROJECTS[0]);
+  const [selectedProject, setSelectedProject] = useState("face/orchestrator-live/src");
   const [customPath, setCustomPath] = useState("");
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -103,6 +123,15 @@ export function VibeCodePanel() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [expandedCommit, setExpandedCommit] = useState<string | null>(null);
+  const [activityTab, setActivityTab] = useState<"commits" | "sessions" | "automate">("commits");
+
+  // Automation tasks state
+  const [automationTasks, setAutomationTasks] = useState<AutomationTask[]>([]);
+  const [loadingAutomation, setLoadingAutomation] = useState(false);
+  const [newTaskName, setNewTaskName] = useState("");
+  const [newTaskCommand, setNewTaskCommand] = useState("");
+  const [newTaskSchedule, setNewTaskSchedule] = useState("manual");
+  const [addingTask, setAddingTask] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const responseRef = useRef<HTMLDivElement>(null);
@@ -121,6 +150,61 @@ export function VibeCodePanel() {
     } finally {
       setLoadingActivity(false);
     }
+  }, []);
+
+  // Load automation tasks
+  const loadAutomation = useCallback(async () => {
+    setLoadingAutomation(true);
+    try {
+      const res = await fetch("/api/brain/automate");
+      const data = await res.json();
+      setAutomationTasks(data.tasks || []);
+    } catch {
+      setAutomationTasks([]);
+    } finally {
+      setLoadingAutomation(false);
+    }
+  }, []);
+
+  const createTask = useCallback(async () => {
+    if (!newTaskName.trim() || !newTaskCommand.trim()) return;
+    setAddingTask(true);
+    try {
+      const res = await fetch("/api/brain/automate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTaskName,
+          command: newTaskCommand,
+          schedule: newTaskSchedule,
+          description: "",
+          createdBy: "VibeCode",
+        }),
+      });
+      const data = await res.json();
+      if (data.task) {
+        setAutomationTasks((prev) => [...prev, data.task]);
+        setNewTaskName("");
+        setNewTaskCommand("");
+        setNewTaskSchedule("manual");
+      }
+    } finally {
+      setAddingTask(false);
+    }
+  }, [newTaskName, newTaskCommand, newTaskSchedule]);
+
+  const toggleTask = useCallback(async (id: string, enabled: boolean) => {
+    await fetch("/api/brain/automate", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, enabled: !enabled }),
+    });
+    setAutomationTasks((prev) => prev.map((t) => t.id === id ? { ...t, enabled: !enabled } : t));
+  }, []);
+
+  const deleteTask = useCallback(async (id: string) => {
+    await fetch(`/api/brain/automate?id=${id}`, { method: "DELETE" });
+    setAutomationTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   // Fetch available models from Ollama endpoint
@@ -175,6 +259,8 @@ export function VibeCodePanel() {
     loadFiles(selectedProject);
     loadActivity(selectedProject);
   }, [selectedProject, loadFiles, loadActivity]);
+
+  useEffect(() => { loadAutomation(); }, [loadAutomation]);
 
   // Handle dropped files/folders — read content directly from File API
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -751,16 +837,18 @@ export function VibeCodePanel() {
                 style={{ ...s.select, width: "100%" }}
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                disabled={ollamaModels.length === 0}
               >
-                {ollamaModels.length === 0 && (
-                  <option value="">No models found</option>
+                {ollamaModels.length === 0 ? (
+                  MODEL_PRESETS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))
+                ) : (
+                  ollamaModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}{m.size ? ` (${m.size})` : ""}
+                    </option>
+                  ))
                 )}
-                {ollamaModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}{m.size ? ` (${m.size})` : ""}
-                  </option>
-                ))}
               </select>
             </div>
             <button
@@ -871,70 +959,193 @@ export function VibeCodePanel() {
         <div style={s.sectionHeader}>
           📊 Activity
           <button
-            onClick={() => loadActivity(selectedProject)}
+            onClick={() => { loadActivity(selectedProject); loadAutomation(); }}
             style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 11, padding: 0 }}
           >
             {loadingActivity ? "…" : "↻"}
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto" as const }}>
-          {/* Git commits */}
-          <div style={{ ...s.sectionHeader, background: "var(--bg2)", fontSize: 10 }}>
-            🔀 Git — {selectedProject.split("/").pop()}
-          </div>
-          {commits.length === 0 && !loadingActivity && (
-            <div style={{ padding: "12px", fontSize: 11, color: "var(--text3)", textAlign: "center" }}>
-              No commits found
-            </div>
-          )}
-          {commits.map((c) => (
-            <div
-              key={c.hash}
-              style={s.commitCard(expandedCommit === c.hash)}
-              onClick={() => setExpandedCommit(expandedCommit === c.hash ? null : c.hash)}
+        {/* Tab bar */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          {(["commits", "sessions", "automate"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActivityTab(tab)}
+              style={{
+                flex: 1, padding: "5px 0", fontSize: 10, background: "none", border: "none",
+                borderBottom: activityTab === tab ? "2px solid var(--accent)" : "2px solid transparent",
+                color: activityTab === tab ? "var(--accent)" : "var(--text3)",
+                cursor: "pointer", textTransform: "uppercase" as const, letterSpacing: 0.5,
+              }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                <span style={s.pill("rgba(88,166,255,0.6)")}>{c.hash}</span>
-                <span style={{ fontSize: 9, color: "var(--text3)" }}>{c.ago}</span>
+              {tab === "commits" ? "🔀 Git" : tab === "sessions" ? "🤖 Sessions" : "⚡ Automate"}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto" as const }}>
+          {/* ── GIT COMMITS TAB ── */}
+          {activityTab === "commits" && (
+            <>
+              <div style={{ ...s.sectionHeader, background: "var(--bg2)", fontSize: 10 }}>
+                {selectedProject.split("/").pop()}
               </div>
-              <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.4, marginBottom: 2 }}>
-                {c.message.slice(0, 72)}{c.message.length > 72 ? "…" : ""}
-              </div>
-              <div style={{ fontSize: 10, color: "var(--text3)" }}>{c.author}</div>
-              {expandedCommit === c.hash && c.files.length > 0 && (
-                <div style={{ marginTop: 6, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
-                  {c.files.map((f) => (
-                    <div key={f} style={{ fontSize: 10, color: "var(--green)", fontFamily: "monospace", lineHeight: 1.6 }}>
-                      + {f}
-                    </div>
-                  ))}
+              {commits.length === 0 && !loadingActivity && (
+                <div style={{ padding: "12px", fontSize: 11, color: "var(--text3)", textAlign: "center" }}>
+                  No commits found
                 </div>
               )}
-            </div>
-          ))}
-
-          {/* Agent sessions */}
-          <div style={{ ...s.sectionHeader, background: "var(--bg2)", fontSize: 10, marginTop: 4 }}>
-            🤖 Agent Sessions
-          </div>
-          {sessions.length === 0 && (
-            <div style={{ padding: "12px", fontSize: 11, color: "var(--text3)", textAlign: "center" }}>
-              No sessions found
-            </div>
+              {commits.map((c) => (
+                <div
+                  key={c.hash}
+                  style={s.commitCard(expandedCommit === c.hash)}
+                  onClick={() => setExpandedCommit(expandedCommit === c.hash ? null : c.hash)}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                    <span style={s.pill("rgba(88,166,255,0.6)")}>{c.hash}</span>
+                    <span style={{ fontSize: 9, color: "var(--text3)" }}>{c.ago}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.4, marginBottom: 2 }}>
+                    {c.message.slice(0, 72)}{c.message.length > 72 ? "…" : ""}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text3)" }}>{c.author}</div>
+                  {expandedCommit === c.hash && c.files.length > 0 && (
+                    <div style={{ marginTop: 6, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+                      {c.files.map((f) => (
+                        <div key={f} style={{ fontSize: 10, color: "var(--green)", fontFamily: "monospace", lineHeight: 1.6 }}>
+                          + {f}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
           )}
-          {sessions.map((s2, i) => (
-            <div key={i} style={{ borderBottom: "1px solid var(--border)", padding: "8px 12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span style={s.pill("rgba(192,132,252,0.6)")}>session</span>
-                <span style={{ fontSize: 9, color: "var(--text3)", fontFamily: "monospace" }}>{s2.session}</span>
-                <span style={{ marginLeft: "auto", fontSize: 9, color: "var(--text3)" }}>{s2.size}</span>
+
+          {/* ── AGENT SESSIONS TAB ── */}
+          {activityTab === "sessions" && (
+            <>
+              <div style={{ ...s.sectionHeader, background: "var(--bg2)", fontSize: 10 }}>
+                Claude Sessions
               </div>
-              <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-word" as const }}>
-                {s2.preview.slice(0, 140)}{s2.preview.length > 140 ? "…" : ""}
+              {sessions.length === 0 && (
+                <div style={{ padding: "12px", fontSize: 11, color: "var(--text3)", textAlign: "center" }}>
+                  No sessions found
+                </div>
+              )}
+              {sessions.map((s2, i) => (
+                <div key={i} style={{ borderBottom: "1px solid var(--border)", padding: "8px 12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <span style={s.pill("rgba(192,132,252,0.6)")}>session</span>
+                    <span style={{ fontSize: 9, color: "var(--text3)", fontFamily: "monospace" }}>{s2.session}</span>
+                    <span style={{ marginLeft: "auto", fontSize: 9, color: "var(--text3)" }}>{s2.size}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-word" as const }}>
+                    {s2.preview.slice(0, 160)}{s2.preview.length > 160 ? "…" : ""}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* ── AUTOMATE TAB ── */}
+          {activityTab === "automate" && (
+            <>
+              <div style={{ ...s.sectionHeader, background: "var(--bg2)", fontSize: 10 }}>
+                Scheduled Tasks
+                <span style={{ marginLeft: "auto", fontSize: 9, color: "var(--text3)" }}>
+                  GET /api/brain · POST /api/brain/automate
+                </span>
               </div>
-            </div>
-          ))}
+
+              {/* New task form */}
+              <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)", background: "var(--bg2)" }}>
+                <input
+                  value={newTaskName}
+                  onChange={(e) => setNewTaskName(e.target.value)}
+                  placeholder="Task name…"
+                  style={{ width: "100%", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 6px", color: "var(--text)", fontSize: 11, marginBottom: 4, boxSizing: "border-box" as const }}
+                />
+                <input
+                  value={newTaskCommand}
+                  onChange={(e) => setNewTaskCommand(e.target.value)}
+                  placeholder="Command or description…"
+                  style={{ width: "100%", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 6px", color: "var(--text)", fontSize: 11, marginBottom: 4, boxSizing: "border-box" as const }}
+                />
+                <div style={{ display: "flex", gap: 4 }}>
+                  <select
+                    value={newTaskSchedule}
+                    onChange={(e) => setNewTaskSchedule(e.target.value)}
+                    style={{ flex: 1, background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 6px", color: "var(--text)", fontSize: 11 }}
+                  >
+                    <option value="manual">manual</option>
+                    <option value="0 * * * *">hourly</option>
+                    <option value="0 0 * * *">daily</option>
+                    <option value="0 0 * * 0">weekly</option>
+                    <option value="*/15 * * * *">every 15m</option>
+                  </select>
+                  <button
+                    onClick={createTask}
+                    disabled={addingTask || !newTaskName.trim() || !newTaskCommand.trim()}
+                    style={{ padding: "4px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", fontSize: 11, cursor: "pointer", opacity: addingTask ? 0.5 : 1 }}
+                  >
+                    {addingTask ? "…" : "+ Add"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Task list */}
+              {loadingAutomation && (
+                <div style={{ padding: 12, fontSize: 11, color: "var(--text3)", textAlign: "center" }}>Loading…</div>
+              )}
+              {!loadingAutomation && automationTasks.length === 0 && (
+                <div style={{ padding: 12, fontSize: 11, color: "var(--text3)", textAlign: "center" }}>
+                  No tasks yet. Any agent can POST to /api/brain/automate to schedule work.
+                </div>
+              )}
+              {automationTasks.map((task) => (
+                <div key={task.id} style={{ borderBottom: "1px solid var(--border)", padding: "8px 12px", opacity: task.enabled ? 1 : 0.5 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 10, color: task.enabled ? "var(--green)" : "var(--text3)" }}>
+                      {task.enabled ? "●" : "○"}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--text)", flex: 1 }}>{task.name}</span>
+                    <span style={{ fontSize: 9, color: "var(--text3)", background: "var(--bg3)", padding: "1px 5px", borderRadius: 3 }}>
+                      {task.schedule}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace", marginTop: 3, marginLeft: 16 }}>
+                    {task.command.slice(0, 60)}{task.command.length > 60 ? "…" : ""}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 4, marginLeft: 16 }}>
+                    <span style={{ fontSize: 9, color: "var(--text3)" }}>by {task.createdBy}</span>
+                    {task.lastRun && <span style={{ fontSize: 9, color: "var(--text3)" }}>· ran {task.lastRun.slice(0, 10)}</span>}
+                    <button onClick={() => toggleTask(task.id, task.enabled)} style={{ marginLeft: "auto", fontSize: 9, background: "none", border: "1px solid var(--border)", borderRadius: 3, color: "var(--text3)", cursor: "pointer", padding: "1px 5px" }}>
+                      {task.enabled ? "pause" : "resume"}
+                    </button>
+                    <button onClick={() => deleteTask(task.id)} style={{ fontSize: 9, background: "none", border: "1px solid rgba(255,80,80,0.4)", borderRadius: 3, color: "rgba(255,100,100,0.8)", cursor: "pointer", padding: "1px 5px" }}>
+                      del
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Agent access info */}
+              <div style={{ margin: 10, padding: 8, background: "var(--bg2)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 10, color: "var(--accent)", marginBottom: 4 }}>🧠 Agent Access</div>
+                <div style={{ fontSize: 10, color: "var(--text3)", lineHeight: 1.6 }}>
+                  Any AI agent (Claude, Qwen, OpenClaw…) can call:
+                </div>
+                <div style={{ fontSize: 10, color: "var(--green)", fontFamily: "monospace", marginTop: 4, lineHeight: 1.8 }}>
+                  GET /api/brain → system status<br />
+                  POST /api/brain/automate → create task<br />
+                  GET /api/brain/automate → list tasks
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
