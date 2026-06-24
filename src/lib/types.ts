@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// Core Types for the Orchestrator Multi-Agent System
+// Enhanced Types — matching the full local orchestrator feature set
 // ═══════════════════════════════════════════════════════════════
 
 export type AgentRole =
@@ -18,6 +18,9 @@ export type IdeaStatus = "pending" | "approved" | "rejected";
 
 export type DebatePhase = "idle" | "active" | "paused" | "completed";
 
+export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskPriority = "low" | "normal" | "high" | "critical";
+
 export interface Agent {
   id: string;
   name: string;
@@ -25,13 +28,24 @@ export interface Agent {
   status: AgentStatus;
   icon: string;
   color: string;
-  model: string; // e.g. "openrouter/anthropic/claude-sonnet-4"
-  provider: string; // e.g. "openrouter", "anthropic", "openai"
+  model: string;
+  provider: string;
   personality: string;
   specialty: string;
-  tools: string[]; // tool IDs the agent can use
+  tools: string[];
   score: number;
   createdAt: string;
+  // n8n node position
+  x?: number;
+  y?: number;
+}
+
+export interface AgentConnection {
+  id: string;
+  from: string;
+  to: string;
+  label?: string;
+  active?: boolean;
 }
 
 export interface DebateMessage {
@@ -56,6 +70,17 @@ export interface Idea {
   tags: string[];
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignee: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ToolCall {
   id: string;
   toolName: string;
@@ -71,7 +96,7 @@ export interface DebateSession {
   id: string;
   topic: string;
   phase: DebatePhase;
-  agents: string[]; // agent IDs
+  agents: string[];
   messages: DebateMessage[];
   ideas: Idea[];
   toolCalls: ToolCall[];
@@ -95,21 +120,38 @@ export interface ToolDefinition {
   }[];
 }
 
-// API request/response types
-
-export interface StartDebateRequest {
-  topic: string;
-  agentIds: string[];
-  maxRounds?: number;
+export interface LLMModel {
+  id: string;
+  name: string;
+  provider: string;
+  contextLength: number;
 }
 
-export interface AgentMessageRequest {
-  sessionId: string;
-  agentId: string;
+export interface SystemStats {
+  cpu: number;
+  memory: number;
+  disk: number;
+  uptime: number;
+}
+
+export interface ServiceStatus {
+  name: string;
+  port: number;
+  status: "running" | "stopped" | "error";
+  url?: string;
+}
+
+export interface Notification {
+  id: string;
+  type: "info" | "success" | "warning" | "error";
+  title: string;
   message: string;
+  timestamp: string;
+  read: boolean;
 }
 
-export interface VoteIdeaRequest {
-  ideaId: string;
-  action: "approve" | "reject" | "upvote";
+export interface ThemePreset {
+  name: string;
+  bg: string;
+  accent: string;
 }
