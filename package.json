@@ -13,6 +13,7 @@
     "@ai-sdk/google": "^3.0.83",
     "@ai-sdk/openai": "^3.0.73",
     "@ai-sdk/openai-compatible": "^2.0.51",
+    "@vercel/analytics": "^2.0.1",
     "@visx/network": "^4.0.0",
     "ai": "^6.0.208",
     "next": "16.2.9",
