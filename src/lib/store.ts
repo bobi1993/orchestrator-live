@@ -85,21 +85,41 @@ let notifications: Notification[] = [
 ];
 
 // ── LLM Models ──────────────────────────────────────────────────
+// isFree = no cost to use (free tier or local)
+// isLocal = runs on your hardware (no API call)
 const models: LLMModel[] = [
-  { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", provider: "Anthropic", contextLength: 200000 },
-  { id: "anthropic/claude-haiku-4-20250514", name: "Claude Haiku 4", provider: "Anthropic", contextLength: 200000 },
-  { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", contextLength: 128000 },
-  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", contextLength: 128000 },
-  { id: "google/gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "Google", contextLength: 1000000 },
-  { id: "google/gemini-2.0-pro", name: "Gemini 2.0 Pro", provider: "Google", contextLength: 2000000 },
-  { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", contextLength: 1000000 },
-  { id: "meta-llama/llama-4-scout", name: "Llama 4 Scout", provider: "Meta", contextLength: 10000000 },
-  { id: "deepseek/deepseek-chat", name: "DeepSeek V3", provider: "DeepSeek", contextLength: 65536 },
-  { id: "deepseek/deepseek-reasoner", name: "DeepSeek R1", provider: "DeepSeek", contextLength: 65536 },
-  { id: "x-ai/grok-3", name: "Grok 3", provider: "xAI", contextLength: 131072 },
-  { id: "x-ai/grok-3-mini", name: "Grok 3 Mini", provider: "xAI", contextLength: 131072 },
-  { id: "mistralai/mistral-large-2", name: "Mistral Large 2", provider: "Mistral", contextLength: 131072 },
-  { id: "qwen/qwen-3-235b", name: "Qwen 3 235B", provider: "Alibaba", contextLength: 131072 },
+  // ── LOCAL (unlimited) ──────────────────────────────────────────
+  { id: "ollama/qwen3-coder:480b-cloud", name: "Qwen3 Coder 480B", provider: "Ollama", contextLength: 131072, isFree: true, isLocal: true, speed: "fast" },
+  { id: "ollama/llama3.2:latest", name: "Llama 3.2", provider: "Ollama", contextLength: 131072, isFree: true, isLocal: true, speed: "fast" },
+  { id: "ollama/llama3.2:1b", name: "Llama 3.2 1B", provider: "Ollama", contextLength: 131072, isFree: true, isLocal: true, speed: "fast" },
+  { id: "ollama/qwen2.5:7b", name: "Qwen2.5 7B", provider: "Ollama", contextLength: 131072, isFree: true, isLocal: true, speed: "fast" },
+  { id: "ollama/phi4:14b", name: "Phi-4 14B", provider: "Ollama", contextLength: 131072, isFree: true, isLocal: true, speed: "medium" },
+  { id: "ollama/mistral:7b", name: "Mistral 7B", provider: "Ollama", contextLength: 32768, isFree: true, isLocal: true, speed: "fast" },
+
+  // ── FREE TIER (cloud) ──────────────────────────────────────────
+  { id: "google/gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "Google", contextLength: 1000000, isFree: true, isLocal: false, speed: "fast" },
+  { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "Google", contextLength: 1000000, isFree: true, isLocal: false, speed: "fast" },
+  { id: "openrouter/openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenRouter", contextLength: 128000, isFree: true, isLocal: false, speed: "fast" },
+  { id: "openrouter/meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct", provider: "OpenRouter", contextLength: 131072, isFree: true, isLocal: false, speed: "medium" },
+  { id: "openrouter/google/gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "OpenRouter", contextLength: 1000000, isFree: true, isLocal: false, speed: "fast" },
+  { id: "openrouter/mistralai/mistral-7b-instruct", name: "Mistral 7B Instruct", provider: "OpenRouter", contextLength: 32768, isFree: true, isLocal: false, speed: "fast" },
+  { id: "openrouter/qwen/qwen-2.5-72b-instruct", name: "Qwen 2.5 72B Instruct", provider: "OpenRouter", contextLength: 131072, isFree: true, isLocal: false, speed: "medium" },
+  { id: "deepseek/deepseek-chat", name: "DeepSeek V3", provider: "DeepSeek", contextLength: 65536, isFree: true, isLocal: false, speed: "medium" },
+  { id: "deepseek/deepseek-reasoner", name: "DeepSeek R1", provider: "DeepSeek", contextLength: 65536, isFree: true, isLocal: false, speed: "medium" },
+
+  // ── PAID (fallback when free exhausted) ────────────────────────
+  { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", provider: "Anthropic", contextLength: 200000, isFree: false, isLocal: false, pricing: "$3/$15 per 1M", speed: "medium" },
+  { id: "anthropic/claude-haiku-4-20250514", name: "Claude Haiku 4", provider: "Anthropic", contextLength: 200000, isFree: false, isLocal: false, pricing: "$0.25/$1.25 per 1M", speed: "fast" },
+  { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", contextLength: 128000, isFree: false, isLocal: false, pricing: "$2.50/$10 per 1M", speed: "medium" },
+  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", contextLength: 128000, isFree: false, isLocal: false, pricing: "$0.15/$0.60 per 1M", speed: "fast" },
+  { id: "google/gemini-2.0-pro", name: "Gemini 2.0 Pro", provider: "Google", contextLength: 2000000, isFree: false, isLocal: false, pricing: "$1.25/$5 per 1M", speed: "medium" },
+  { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "Google", contextLength: 1000000, isFree: false, isLocal: false, pricing: "$1.25/$7.50 per 1M", speed: "medium" },
+  { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", contextLength: 1000000, isFree: false, isLocal: false, pricing: "via OpenRouter", speed: "medium" },
+  { id: "meta-llama/llama-4-scout", name: "Llama 4 Scout", provider: "Meta", contextLength: 10000000, isFree: false, isLocal: false, pricing: "via OpenRouter", speed: "medium" },
+  { id: "x-ai/grok-3", name: "Grok 3", provider: "xAI", contextLength: 131072, isFree: false, isLocal: false, pricing: "$3/$15 per 1M", speed: "medium" },
+  { id: "x-ai/grok-3-mini", name: "Grok 3 Mini", provider: "xAI", contextLength: 131072, isFree: false, isLocal: false, pricing: "$0.30/$1.50 per 1M", speed: "fast" },
+  { id: "mistralai/mistral-large-2", name: "Mistral Large 2", provider: "Mistral", contextLength: 131072, isFree: false, isLocal: false, pricing: "$2/$6 per 1M", speed: "medium" },
+  { id: "qwen/qwen-3-235b", name: "Qwen 3 235B", provider: "Alibaba", contextLength: 131072, isFree: false, isLocal: false, pricing: "via API", speed: "slow" },
 ];
 
 export const store = {

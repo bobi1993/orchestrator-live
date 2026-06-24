@@ -105,6 +105,18 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [panel, loadIdeas, loadAgents]);
 
+  // DashCommanderView shell deep-link: listen for SWITCH_PANEL postMessages
+  useEffect(() => {
+    const VALID_PANELS: Panel[] = ["overview", "debate", "ideas", "agents", "nodes", "tasks", "models", "tools", "system", "settings", "vibe"];
+    function onMessage(e: MessageEvent) {
+      if (e.data?.type === "SWITCH_PANEL" && VALID_PANELS.includes(e.data.panel)) {
+        setPanel(e.data.panel);
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   // Close notification panel on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {

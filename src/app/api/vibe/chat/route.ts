@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 const DEFAULT_ENDPOINT = "http://localhost:11434";
-const DEFAULT_MODEL = "llama3.2:latest";
+const DEFAULT_MODEL = "google/gemini-2.5-pro";
 
 const SYSTEM_PROMPT =
   "You are an expert coding assistant. When asked to modify code, respond with the complete updated file content wrapped in a markdown code block, followed by a brief explanation. Be direct and precise.";

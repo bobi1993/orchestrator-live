@@ -181,6 +181,7 @@ export function AgentPanel({ agents, onRefresh }: Props) {
                 }
                 className="w-full text-xs"
               >
+                <option value="gemini">Google Gemini</option>
                 <option value="openrouter">OpenRouter</option>
                 <option value="anthropic">Anthropic</option>
                 <option value="openai">OpenAI</option>

@@ -29,6 +29,10 @@ async function checkService(svc: { name: string; url: string; label: string }) {
     const timer = setTimeout(() => controller.abort(), 2000);
     const res = await fetch(svc.url, { signal: controller.signal });
     clearTimeout(timer);
+    // A 401/403 means the service is alive but requires auth — that's "up", not broken.
+    if (res.status === 401 || res.status === 403) {
+      return { ...svc, status: "ok" as const, detail: "secured (auth required)" };
+    }
     if (!res.ok) return { ...svc, status: "error" as const, detail: `HTTP ${res.status}` };
     const json = await res.json().catch(() => ({}));
     // Ollama returns { models: [...] }

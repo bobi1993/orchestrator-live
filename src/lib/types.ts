@@ -125,6 +125,10 @@ export interface LLMModel {
   name: string;
   provider: string;
   contextLength: number;
+  isFree: boolean;
+  isLocal: boolean;
+  pricing?: string;
+  speed?: "fast" | "medium" | "slow";
 }
 
 export interface SystemStats {
